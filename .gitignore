@@ -12,6 +12,7 @@ build/
 # Logs
 logs/
 *.log
+exclude_list.txt
 
 #images
 *.jpeg
@@ -53,3 +54,4 @@ coverage/
 # Temporary folders
 tmp/
 temp/
+jimeng-*.md

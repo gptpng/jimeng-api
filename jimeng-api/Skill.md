@@ -5,7 +5,7 @@ version: 1.0.0
 dependencies: python>=3.7, requests>=2.28.0, Pillow>=9.0.0
 ---
 
-# Jimeng Image Generator
+# Jimeng API
 
 ## Overview
 
@@ -37,6 +37,11 @@ Use this skill when users request:
    - 日本站: Add `jp-` prefix (e.g., `jp-your_session_id`)
    - 新加坡站: Add `sg-` prefix (e.g., `sg-your_session_id`)
 
+**⚠️ nanobanana Model Resolution Rules**:
+   - **US site (us-)**: Fixed at 1024×1024 with 2k resolution; ignores user-provided `ratio` and `resolution` parameters
+   - **HK/JP/SG sites (hk-/jp-/sg-)**: Forced 1k resolution, but supports custom `ratio` parameters (e.g., 16:9, 4:3)
+   - **Domestic site (CN)**: Does not support nanobanana model; use jimeng series instead
+
 **Always ask the user for their Session ID before proceeding**, as the skill does not include a pre-configured credential.
 
 Example prompt to user:
@@ -46,19 +51,32 @@ Example prompt to user:
 >
 > 请提供您的 Session ID。"
 
+## Parameter Usage Guidelines
+
+⚠️⚠️ IMPORTANT PARAMETER DISCIPLINE
+
+- ✅ **ONLY PASS PARAMETERS THE USER EXPLICITLY MENTIONS.**
+- ❌ **DO NOT GUESS OR ADD UNSPECIFIED PARAMETERS.**
+- ✅ **LET THE SCRIPT USE BUILT-IN DEFAULTS** when the user did not specify:
+  - ratio: 1:1
+  - resolution: 2k
+  - model: jimeng-4.0
+  - intelligent_ratio: false
+
+Rationale: Tools may “helpfully” add options (e.g., `--ratio 16:9`) that the user didn’t request, overriding script defaults. This is prohibited. Pass only the parameters the user asked for; otherwise, rely on defaults.
+
 ### Basic Workflow
 
 1. **Receive user request** for image generation
-2. **Verify API availability** (check if Docker service is running)
-3. **Request Session ID** from the user if not already provided
-4. **Clarify requirements**:
+2. **Request Session ID** from the user if not already provided
+3. **Clarify requirements**:
    - Text prompt (文生图) or input images (图生图)
    - Model selection (jimeng-4.0, jimeng-3.1, etc.)
    - Aspect ratio (1:1, 16:9, 4:3, etc.)
    - Resolution (1k, 2k, 4k)
    - Intelligent ratio (auto-detect based on prompt keywords)
-5. **Execute generation** using the `generate_image.py` script
-6. **Report results** with file paths and display the generated images
+4. **Execute generation** using the `generate_image.py` script — REMINDER: **only pass parameters explicitly requested by the user; do not add/guess any optional flags**
+5. **Report results** — show file paths only. **DO NOT READ/OPEN/ANALYZE GENERATED IMAGES. DO NOT CALL ANY READ TOOL (e.g., `Read`, `view_image`). STOP AFTER SAVING.**
 
 ## Image Generation Tasks
 
@@ -66,10 +84,16 @@ Example prompt to user:
 
 Generate images from text descriptions.
 
-**Example user request:**
-> "生成一张2K分辨率的16:9图片,内容是未来都市的日落景色,有飞行汽车"
+**Minimal default usage (no optional params):**
+```bash
+python scripts/generate_image.py text \
+    "a cute cat" \
+    --session-id "YOUR_SESSION_ID"
+```
 
-**Script usage:**
+Only include optional parameters when the user explicitly requests them.
+
+**With user-specified parameters (only when requested):**
 ```bash
 python scripts/generate_image.py text \
     "futuristic city at sunset with flying cars" \
@@ -83,12 +107,12 @@ python scripts/generate_image.py text \
 - `prompt` (required): Text description of the desired image
 - `--session-id`: Jimeng session ID (required)
 - `--model`: Model to use (default: `jimeng-4.0`)
-  - Options: `jimeng-4.0`, `jimeng-3.1`, `jimeng-3.0`, `jimeng-2.1`, `jimeng-xl-pro`, `nanobanana` (international only)
+  - Options: `jimeng-4.5`, `jimeng-4.0`, `jimeng-3.1`, `jimeng-3.0`, `jimeng-2.1`, `jimeng-xl-pro`, `nanobanana` (international only)
 - `--ratio`: Aspect ratio (default: `1:1`)
   - Options: `1:1`, `4:3`, `3:4`, `16:9`, `9:16`, `3:2`, `2:3`, `21:9`
 - `--resolution`: Resolution level (default: `2k`)
   - Options: `1k`, `2k`, `4k`
-- `--intelligent-ratio`: Enable smart ratio detection based on prompt keywords
+- `--intelligent-ratio`: Enable smart ratio detection based on prompt keywords **⚠️ Only works for jimeng-4.0/jimeng-4.1/jimeng-4.5 models; other models will ignore this parameter**
 - `--negative-prompt`: Negative prompt (elements to avoid)
 - `--sample-strength`: Sampling strength (0.0-1.0)
 - `--api-url`: Custom API URL (default: `http://localhost:5100`)
@@ -107,16 +131,13 @@ Transform or compose images based on text guidance.
 python scripts/generate_image.py image \
     "transform to oil painting style, vivid colors, visible brushstrokes" \
     --session-id "YOUR_SESSION_ID" \
-    --images "/path/to/image.jpg" \
-    --ratio "1:1" \
-    --resolution "2k"
+    --images "/path/to/image.jpg"
 
 # Using image URL
 python scripts/generate_image.py image \
     "anime style, cute cat" \
     --session-id "YOUR_SESSION_ID" \
-    --images "https://example.com/cat.jpg" \
-    --model "jimeng-4.0"
+    --images "https://example.com/cat.jpg"
 
 # Multiple images (up to 10)
 python scripts/generate_image.py image \
@@ -134,6 +155,8 @@ python scripts/generate_image.py image \
 
 ### Intelligent Ratio Detection
 
+**⚠️ IMPORTANT**: This feature only works with the `jimeng-4.0`, `jimeng-4.1`, and `jimeng-4.5` models. Other models (jimeng-3.0, nanobanana, etc.) will ignore the `--intelligent-ratio` flag.
+
 Use `--intelligent-ratio` to automatically select the best aspect ratio based on prompt keywords.
 
 **Example:**
@@ -141,7 +164,7 @@ Use `--intelligent-ratio` to automatically select the best aspect ratio based on
 python scripts/generate_image.py text \
     "奔跑的狮子,竖屏" \
     --session-id "YOUR_SESSION_ID" \
-    --resolution "2k" \
+    --model "jimeng-4.0" \
     --intelligent-ratio
 ```
 
@@ -149,8 +172,14 @@ python scripts/generate_image.py text \
 
 | Resolution | Ratio | Dimensions |
 |------------|-------|------------|
-| **1k** | 1:1 | 1328×1328 |
-|  | 16:9 | 1664×936 |
+| **1k** | 1:1 | 1024×1024 |
+|  | 4:3 | 768×1024 |
+|  | 3:4 | 1024×768 |
+|  | 16:9 | 1024×576 |
+|  | 9:16 | 576×1024 |
+|  | 3:2 | 1024×682 |
+|  | 2:3 | 682×1024 |
+|  | 21:9 | 1195×512 |
 | **2k** (default) | 1:1 | 2048×2048 |
 |  | 16:9 | 2560×1440 |
 |  | 4:3 | 2304×1728 |
@@ -202,7 +231,7 @@ Do we have Session ID?
     ↓
 Text-to-Image or Image-to-Image?
     ├─ Text-to-Image
-    │   └─ Run: generate_image.py text "prompt" --session-id ID --ratio RATIO --resolution RES
+    │   └─ Run: generate_image.py text "prompt" --session-id ID  (add --ratio/--resolution/--model ONLY if user explicitly requests)
     └─ Image-to-Image
         └─ Run: generate_image.py image "prompt" --session-id ID --images PATH1 [PATH2...]
     ↓
@@ -212,9 +241,11 @@ Script executes:
     3. Downloads all images to /pic folder
     4. Reports file paths
     ↓
-Inform user of results
-    ├─ Success → Show file paths, display generated images
-    └─ Failure → Report error, suggest troubleshooting
+    Inform user of results
+        ├─ Success → Show file paths only
+        └─ Failure → Report error, suggest troubleshooting
+        ↓
+    HARD STOP — DO NOT READ/OPEN/ANALYZE IMAGES; DO NOT CALL `Read`/`view_image`; TASK COMPLETE
 ```
 
 ## Troubleshooting
@@ -239,39 +270,25 @@ Inform user of results
 - `nanobanana` only works with international sites (us-/hk-/jp-/sg- prefix)
 - `jimeng-3.1` and `jimeng-2.1` only work with domestic sites
 
+**"nanobanana resolution mismatch"**
+- **US site (us- prefix)**: nanobanana model only supports 1024×1024 @ 2k resolution; all `ratio` and `resolution` parameters are ignored
+- **HK/JP/SG sites (hk-/jp-/sg- prefix)**: nanobanana model forces 1k resolution, but allows custom ratios (e.g., 16:9, 4:3)
+- If you need full control over resolution and ratio, use `jimeng-4.0` model instead
+
+**"intelligent_ratio not working"**
+- The `--intelligent-ratio` flag only works with `jimeng-4.0`, `jimeng-4.1`, and `jimeng-4.5` models
+- Other models (jimeng-3.0, nanobanana, etc.) will ignore this parameter
+- Solution: Use `jimeng-4.0`, `jimeng-4.1`, or `jimeng-4.5` if you need intelligent ratio detection
+
 ## Best Practices
 
 1. **Request Session ID early** - Ask for it upfront if not already provided
-2. **Clarify generation mode** - Determine if user wants text-to-image or image-to-image
-3. **Optimize prompts** - Help users craft detailed, descriptive prompts
-   - Include: subject, style, lighting, colors, composition, details
-4. **Choose appropriate resolution** - Balance quality vs generation time
-   - 1k: Fast, suitable for previews
-   - 2k: Default, good balance
-   - 4k: High quality, slower generation
-5. **Use intelligent ratio when applicable** - Enable when prompt contains orientation hints
-6. **Inform about output location** - Always tell users where images are saved
-7. **Display generated images** - After download, show the images to the user for review
-8. **Handle all variations** - API returns image-urls; download and present all of them
-
-## Advanced Prompt Engineering
-
-For high-quality results, guide users to provide detailed prompts:
-
-**Well-crafted prompt example**:
-```
-"赛博朋克风格的未来都市街景,霓虹灯闪烁,雨后湿润的地面反射光线,
-16:9横屏构图,电影感,景深效果,高细节渲染,蓝紫色调为主,
-夜景氛围,光线追踪,超现实主义"
-```
-
-**Prompt structure**:
-1. **主题** (Subject): 核心内容
-2. **风格** (Style): 艺术风格、渲染技术
-3. **光照** (Lighting): 光线条件、氛围
-4. **色彩** (Color): 色调、色彩方案
-5. **构图** (Composition): 视角、画面比例
-6. **细节** (Details): 特定元素、质感
+2. **Parameter discipline: Only pass explicitly requested parameters**
+3. **Clarify generation mode** - Determine if user wants text-to-image or image-to-image
+4. **Use intelligent ratio when applicable** - Enable when prompt contains orientation hints
+5. **Inform about output location** - Always tell users where images are saved; **DO NOT read/open/analyze images; DO NOT call `Read`/`view_image`; STOP after saving**
+6. **Handle all variations** - API returns image-urls; download and present all of them
+7. **HARD STOP — REPORT FILE PATHS ONLY** - **DO NOT READ/OPEN/ANALYZE GENERATED IMAGES. NEVER CALL ANY READ TOOL AFTER GENERATION. TASK IS COMPLETE ONCE FILES ARE SAVED.**
 
 ## Example Interactions
 
@@ -286,7 +303,6 @@ Claude: "✅ 成功生成4张图片!
 - /project/pic/jimeng_20250116_153022_2.png
 - /project/pic/jimeng_20250116_153022_3.png
 - /project/pic/jimeng_20250116_153022_4.png"
-[Displays images]
 ```
 
 **Example 2: High-resolution with custom ratio**
